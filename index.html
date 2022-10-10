@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <!-- Give the page a title -->
+  <title>ESPRIT</title>
+  <!-- Add a link to the Leaflet CSS library so you can reference it for styling your map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" />
+  <!-- All the CSS code goes inside the style tags below -->
+  <style>
+    /* style the body */
+    body {
+      margin: 0px;
+      height: 100%;
+      width: 100%;
+    }
+
+    /* style header */
+    header {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      width: 447px;
+      height: 50px;
+      background-color: rgba(255, 255, 255, 1.0);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+      border-radius: 3px;
+      z-index: 800;
+    }
+
+    /* style the map */
+    #map {
+      position: absolute;
+      width: 100%;
+      top: 0px;
+      bottom: 0;
+    }
+
+    /* style the slider-control div */
+    #slider-control {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      width: 30%;
+      height: 25px;
+      z-index: 700;
+    }
+
+    /* Set slider styles */
+    #slider {
+      position: absolute;
+      height: 100%;
+      bottom: 0px;
+      left: 137px;
+      z-index: 1000;
+      background-color: #FFFFFF;
+      border-radius: 3px;
+      box-shadow: 0px 0px 0px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Set count legend styles */
+    #count {
+      position: absolute;
+      height: 100%;
+      bottom: 0px;
+      width: 125px;
+      z-index: 1000;
+      background-color: #FFFFFF;
+      border-radius: 3px;
+      box-shadow: 0px 0px 0px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Set the styles for the text span in the count legend */
+    #count span {
+      font-family: 'Montserrat', sans-serif;
+      position: absolute;
+      font-size: 13px;
+      bottom: 4px;
+      left: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- the map -->
+  <div id="map"></div>
+  <!-- ui slider -->
+  <div id="slider-control">
+    <div id="slider" class="leaflet-control">
+      <!-- Use the highest and lowest count of the register count data as the min and max. Set the initial value as one. Set the steps at one. -->
+      <input type="range" min="1" max="14" value="1" step="1" class="slider" />
+    </div>
+    <!-- count legend -->
+    <div id='count'>
+      <h5 class='txt-bold'><span></span></h5>
+    </div>
+  </div>
+  <!-- Add a link to the Leaflet JavaScript library so you can reference it for building your map -->
+  <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"></script>
+  <!-- Add a link to the jQuery JavaScript library so you can leverage ajax methods to load your data -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <!-- All JavaScript goes inside the script tags below -->
+  <script>
+    // define the map with the options above
+    const map = L.map("map");
+
+    // add a base map to the map
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles &copy; Esri &mdash; Source: USGS, Esri, TANA, DeLorme, and NPS',
+      maxZoom: 13
+    }).addTo(map);
+
+    // Add a scale bar
+    L.control.scale({
+      position: 'bottomright' // Position the scale bar at the bottom-right corner
+    }).addTo(map);
+
+    // Define color ramp for checkerboard registers
+    function setCBColor(d) {
+      return d == 4 ? '#ff0000' :
+        d == 3 ? '#ff4040' :
+        d == 2 ? '#ff8080' :
+        d == 1 ? '#ffbfbf' :
+        'rgba(0,0,0,0)';
+    };
+    function setCHColor(d) {
+      return d > 3 ? '#ff0000' :
+        d > 2 ? '#ff4040' :
+        d > 1 ? '#ff8080' :
+        d > 0 ? '#ffbfbf' :
+        'rgba(0,0,0,0)';
+    };
+    function setTRColor(d) {
+      return 21 < d ? '#ff0000' :
+        8 < d ? '#ff4040' :
+        2 < d ? '#ff8080' :
+        0 < d ? '#ffbfbf' :
+        'rgba(0,0,0,0)';
+    };
+    function setZZColor(d) {
+      return 7 < d ? '#ff0000' :
+        3 < d ? '#ff4040' :
+        1 < d ? '#ff8080' :
+        0 < d ? '#ffbfbf' :
+        'rgba(0,0,0,0)';
+    };
+
+    // Define an empty layer group for the filtered data
+    const cbFiltered = L.layerGroup().addTo(map);
+    const chFiltered = L.layerGroup();
+    const trFiltered = L.layerGroup();
+    const zzFiltered = L.layerGroup();
+
+    // Define the overlays
+    const overlays = {
+      "Checkerboard":cbFiltered,
+      "Chevron":chFiltered,
+      "Triangle":trFiltered,
+      "Zigzag":zzFiltered
+    };
+
+    // Create a layer control
+    L.control.layers(overlays, null, {
+      collapsed:false,
+    }).addTo(map);
+
+    // use jquery to load GeoJSON data
+    $.when(
+      $.getJSON("data/hex_grid.geojson"),
+      $.getJSON("data/portugal_districts.geojson"),
+      $.getJSON("data/spain_provinces.geojson"),
+      $.getJSON("data/portugal_boundary.geojson"),
+      $.getJSON("data/spain_boundary.geojson"),
+      $.getJSON("data/Registers_all_hex_count_checkerboard.geojson"),
+      $.getJSON("data/Registers_all_hex_count_chevron.geojson"),
+      $.getJSON("data/Registers_all_hex_count_triangle.geojson"),
+      $.getJSON("data/Registers_all_hex_count_zigzag.geojson"),
+    // when the files are done loading,
+    // identify them with names and process them through a function
+  ).done(function(hg, pd, sp, pb, sb, cb, ch, tr, zz) {
+
+      // define the value in the slider when the map loads
+      let currentCount = $('.slider').val();
+
+      const hexGrid = L.geoJson(hg, {
+        style: function(feature) {
+          return {
+            color: 'gray',
+            weight: 0.5,
+            opacity: 0.3,
+            fillOpacity: 0.0,
+          }
+        }
+      }).addTo(map);
+
+      // fit the map to the bounds of the grid
+      map.fitBounds(hexGrid.getBounds());
+
+      const portugalDist = L.geoJson(pd, {
+        style: function(feature) {
+          return {
+            color: 'gray',
+            weight: 0.5,
+            opacity: 0.3,
+            fillOpacity: 0.0,
+          }
+        }
+      }).addTo(map);
+
+      const spainProv = L.geoJson(sp, {
+        style: function(feature) {
+          return {
+            color: 'gray',
+            weight: 0.5,
+            opacity: 0.3,
+            fillOpacity: 0.0,
+          }
+        }
+      }).addTo(map);
+
+      const portugalBound = L.geoJson(pb, {
+        style: function(feature) {
+          return {
+            color: 'gray',
+            weight: 1.5,
+            opacity: 0.3,
+            fillOpacity: 0.0,
+          }
+        }
+      }).addTo(map);
+
+      const spainBound = L.geoJson(sb, {
+        style: function(feature) {
+          return {
+            color: 'gray',
+            weight: 1.5,
+            opacity: 0.3,
+            fillOpacity: 0.0,
+          }
+        }
+      }).addTo(map);
+
+      // Define the checkerboard layer
+      const checkerboard = L.geoJson(cb, {
+        // style the layer
+        style: function(feature) {
+          return {
+            fillColor: setCBColor(feature.properties.SUM_Count), // Call color function
+            fillOpacity: 0.75,
+            opacity: 0.0
+          }
+        },
+        // iterate through each feature
+        onEachFeature: function(feature, layer) {
+          // on mouseover...
+          layer.on("mouseover", function() {
+            // reset the layer's style
+            layer.setStyle({
+              fillOpacity: 1.0
+            })
+          });
+          // on mouseout...
+          layer.on("mouseout", function() {
+            // reset the layer's style
+            layer.setStyle({
+              fillOpacity: 0.75
+            })
+          });
+
+          layer.bindTooltip('Total Plaques: ' + feature.properties.SUM_Count);
+
+          if (feature.properties.Start_Count <= currentCount && currentCount <= feature.properties.End_Count) {
+            // add the layer to the layer group
+            cbFiltered.addLayer(layer);
+          } else {
+            cbFiltered.removeLayer(layer);
+          };
+
+        }
+      });
+
+      // Define the chevron layer
+      const chevron = L.geoJson(ch, {
+        // style the layer
+        style: function(feature) {
+          return {
+            fillColor: setCHColor(feature.properties.SUM_Count), // Call color function
+            fillOpacity: 0.75,
+            opacity: 0.0
+          }
+        },
+        // iterate through each feature
+        onEachFeature: function(feature, layer) {
+          // on mouseover...
+          layer.on("mouseover", function() {
+            // reset the layer's style
+            layer.setStyle({
+              fillOpacity: 1.0
+            })
+          });
+          // on mouseout...
+          layer.on("mouseout", function() {
+            // reset the layer's style
+            layer.setStyle({
+              fillOpacity: 0.75
+            })
+          });
+
+          layer.bindTooltip('Total Plaques: ' + feature.properties.SUM_Count);
+
+          if (feature.properties.Start_Count <= currentCount && currentCount <= feature.properties.End_Count) {
+            // add the layer to the layer group
+            chFiltered.addLayer(layer);
+          } else {
+            chFiltered.removeLayer(layer);
+          };
+
+        }
+      });
+
+      // Define the triangle layer
+      const triangle = L.geoJson(tr, {
+        // style the layer
+        style: function(feature) {
+          return {
+            fillColor: setTRColor(feature.properties.SUM_Count), // Call color function
+            fillOpacity: 0.75,
+            opacity: 0.0
+          }
+        },
+        // iterate through each feature
+        onEachFeature: function(feature, layer) {
+          // on mouseover...
+          layer.on("mouseover", function() {
+            // reset the layer's style
+            layer.setStyle({
+              fillOpacity: 1.0
+            })
+          });
+          // on mouseout...
+          layer.on("mouseout", function() {
+            // reset the layer's style
+            layer.setStyle({
+              fillOpacity: 0.75
+            })
+          });
+
+          layer.bindTooltip('Total Plaques: ' + feature.properties.SUM_Count);
+
+          if (feature.properties.Start_Count <= currentCount && currentCount <= feature.properties.End_Count) {
+            // add the layer to the layer group
+            trFiltered.addLayer(layer);
+          } else {
+            trFiltered.removeLayer(layer);
+          };
+
+        }
+      });
+
+      // Define the zigzag layer
+      const zigzag = L.geoJson(zz, {
+        // style the layer
+        style: function(feature) {
+          return {
+            fillColor: setZZColor(feature.properties.SUM_Count), // Call color function
+            fillOpacity: 0.75,
+            opacity: 0.0
+          }
+        },
+        // iterate through each feature
+        onEachFeature: function(feature, layer) {
+          // on mouseover...
+          layer.on("mouseover", function() {
+            // reset the layer's style
+            layer.setStyle({
+              fillOpacity: 1.0
+            })
+          });
+          // on mouseout...
+          layer.on("mouseout", function() {
+            // reset the layer's style
+            layer.setStyle({
+              fillOpacity: 0.75
+            })
+          });
+
+          layer.bindTooltip('Total Plaques: ' + feature.properties.SUM_Count);
+
+          if (feature.properties.Start_Count <= currentCount && currentCount <= feature.properties.End_Count) {
+            // add the layer to the layer group
+            zzFiltered.addLayer(layer);
+          } else {
+            zzFiltered.removeLayer(layer);
+          };
+
+        }
+      });
+
+      // call functions defined below
+      sequenceUI(checkerboard, chevron, triangle, zigzag); // calls the slider and sends the layers to it
+      createCountLegend(currentCount); // calls the createCountLegend function
+
+    });
+
+    // Define a function called "sequenceUI"
+    function sequenceUI(checkerboard, chevron, triangle, zigzag) { // feed it the data
+
+      // use the jQuery ajax method to get the slider element
+      $('.slider')
+        .on('input change', function() { // when the input changes...
+          let currentCount = $(this).val(); // identify the input selected with "currentCount"
+          createCountLegend(currentCount); // call the createCountLegend function
+
+          // for each layer in the layer groups...
+			    checkerboard.eachLayer(function(layer) {
+
+            // Check if the currentCount falls between the start and end counts of the feature
+            if (layer.feature.properties.Start_Count <= currentCount && currentCount <= layer.feature.properties.End_Count) {
+              // add the layer to the layer group
+              cbFiltered.addLayer(layer);
+            } else {
+              // remove the layer from the layer group
+              cbFiltered.removeLayer(layer);
+            };
+
+          });
+
+          // for each layer in the layer groups...
+			    chevron.eachLayer(function(layer) {
+
+            // Check if the currentCount falls between the start and end counts of the feature
+            if (layer.feature.properties.Start_Count <= currentCount && currentCount <= layer.feature.properties.End_Count) {
+              // add the layer to the layer group
+              chFiltered.addLayer(layer);
+            } else {
+              // remove the layer from the layer group
+              chFiltered.removeLayer(layer);
+            };
+
+          });
+
+          // for each layer in the layer groups...
+          triangle.eachLayer(function(layer) {
+
+            // Check if the currentCount falls between the start and end counts of the feature
+            if (layer.feature.properties.Start_Count <= currentCount && currentCount <= layer.feature.properties.End_Count) {
+              // add the layer to the layer group
+              trFiltered.addLayer(layer);
+            } else {
+              // remove the layer from the layer group
+              trFiltered.removeLayer(layer);
+            };
+
+          });
+
+          // for each layer in the layer groups...
+          zigzag.eachLayer(function(layer) {
+
+            // Check if the currentCount falls between the start and end counts of the feature
+            if (layer.feature.properties.Start_Count <= currentCount && currentCount <= layer.feature.properties.End_Count) {
+              // add the layer to the layer group
+              zzFiltered.addLayer(layer);
+            } else {
+              // remove the layer from the layer group
+              zzFiltered.removeLayer(layer);
+            };
+
+          });
+
+        });
+
+    }; // End sequenceUI function
+
+    // Add a count legend in sync with the UI slider
+    function createCountLegend(currentCount) { // feed it the selected count
+
+      $('#count span').html("Register Count: " + currentCount); // change grade value to that currently selected by UI slider
+
+    }; // End createCountLegend function
+
+  </script>
+</body>
+
+</html>

@@ -80,6 +80,24 @@
       bottom: 4px;
       left: 5px;
     }
+
+    /* define legend styles */
+    .legend {
+      line-height: 18px;
+      color: #555;
+      padding: 6px 8px;
+      background-color: rgba(255, 255, 255, 0.7);
+      border-radius: 3px;
+    }
+
+    .legend i {
+      width: 18px;
+      height: 18px;
+      float: left;
+      margin-right: 8px;
+      opacity: 0.7;
+    }
+
   </style>
 </head>
 
@@ -114,7 +132,7 @@
 
     // Add a scale bar
     L.control.scale({
-      position: 'bottomright' // Position the scale bar at the bottom-right corner
+      position: 'topright' // Position the scale bar at the bottom-right corner
     }).addTo(map);
 
     // Define color ramp for checkerboard registers
@@ -479,6 +497,122 @@
       $('#count span').html("Register Count: " + currentCount); // change grade value to that currently selected by UI slider
 
     }; // End createCountLegend function
+
+    // define a Leaflet control for the legend and position it at the bottom-right corner of the map
+    const checkerboardLegend = L.control({
+      position: 'bottomright'
+    });
+    const chevronLegend = L.control({
+      position: 'bottomright'
+    });
+    const triangleLegend = L.control({
+      position: 'bottomright'
+    });
+    const zigzagLegend = L.control({
+      position: 'bottomright'
+    });
+
+    // add content to the legend
+    checkerboardLegend.onAdd = function(map) {
+      // define a div inside the legend
+      const div = L.DomUtil.create('div', 'info legend'),
+        // in addition to grades corresponding to our choropleth ranges
+        grades = [0, 1, 2, 3];
+      // append a title to the div in the legend
+      div.innerHTML += '<b>Checkerboard Plaque Counts<b><br><br>';
+      // loop through our migrant total intervals and generate a label with a colored square for each interval
+      for (var i = 0; i < grades.length; i++) {
+        div.innerHTML +=
+          '<i style="background:' + setCHColor(grades[i] + 1) + '"></i> ' +
+          (grades[i] + 1) + (grades[i + 1] ? '' + '<br>' : '');
+      }
+      // return the div
+      return div;
+    };
+
+    // add content to the legend
+    chevronLegend.onAdd = function(map) {
+      // define a div inside the legend
+      const div = L.DomUtil.create('div', 'info legend'),
+        // in addition to grades corresponding to our choropleth ranges
+        grades = [0, 1, 2, 3];
+      // append a title to the div in the legend
+      div.innerHTML += '<b>Chevron Plaque Counts<b><br><br>';
+      // loop through our migrant total intervals and generate a label with a colored square for each interval
+      for (var i = 0; i < grades.length; i++) {
+        div.innerHTML +=
+          '<i style="background:' + setCHColor(grades[i] + 1) + '"></i> ' +
+          (grades[i] + 1) + (grades[i + 1] ? '' + '<br>' : '+');
+      }
+      // return the div
+      return div;
+    };
+
+    // add content to the legend
+    triangleLegend.onAdd = function(map) {
+      // define a div inside the legend
+      const div = L.DomUtil.create('div', 'info legend'),
+        // in addition to grades corresponding to our choropleth ranges
+        grades = [0, 2, 8, 21];
+      // append a title to the div in the legend
+      div.innerHTML += '<b>Triangle Plaque Counts<b><br><br>';
+      // loop through our migrant total intervals and generate a label with a colored square for each interval
+      for (var i = 0; i < grades.length; i++) {
+        div.innerHTML +=
+          '<i style="background:' + setTRColor(grades[i] + 1) + '"></i> ' +
+          (grades[i] + 1) + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
+      }
+      // return the div
+      return div;
+    };
+
+    // add content to the legend
+    zigzagLegend.onAdd = function(map) {
+      // define a div inside the legend
+      const div = L.DomUtil.create('div', 'info legend'),
+        // in addition to grades corresponding to our choropleth ranges
+        grades = [0, 1, 3, 7];
+      // append a title to the div in the legend
+      div.innerHTML += '<b>Zigzag Plaque Counts<b><br><br>';
+      // loop through our migrant total intervals and generate a label with a colored square for each interval
+      for (var i = 0; i < grades.length; i++) {
+        div.innerHTML +=
+          '<i style="background:' + setZZColor(grades[i] + 1) + '"></i> ' +
+          (grades[i] + 1) + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
+      }
+      // return the div
+      return div;
+    };
+
+    // add the legends to the map
+    checkerboardLegend.addTo(map);
+
+    map.on('baselayerchange', function(e) {
+      if(e.name == "Checkerboard"){
+        checkerboardLegend.addTo(map);
+        map.removeControl(chevronLegend);
+        map.removeControl(triangleLegend);
+        map.removeControl(zigzagLegend);
+      };
+      if(e.name == "Chevron"){
+        chevronLegend.addTo(map);
+        map.removeControl(checkerboardLegend);
+        map.removeControl(triangleLegend);
+        map.removeControl(zigzagLegend);
+      };
+      if(e.name == "Triangle"){
+        triangleLegend.addTo(map);
+        map.removeControl(checkerboardLegend);
+        map.removeControl(chevronLegend);
+        map.removeControl(zigzagLegend);
+      };
+      if(e.name == "Zigzag"){
+        zigzagLegend.addTo(map);
+        map.removeControl(checkerboardLegend);
+        map.removeControl(chevronLegend);
+        map.removeControl(triangleLegend);
+      };
+    });
 
   </script>
 </body>

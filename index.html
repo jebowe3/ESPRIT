@@ -8,6 +8,9 @@
   <title>ESPRIT</title>
   <!-- Add a link to the Leaflet CSS library so you can reference it for styling your map -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora&family=Quattrocento&display=swap" rel="stylesheet">
   <!-- All the CSS code goes inside the style tags below -->
   <style>
     /* style the body */
@@ -22,12 +25,38 @@
       position: fixed;
       top: 10px;
       left: 10px;
-      width: 447px;
-      height: 50px;
+      width: 390px;
+      height: 70px;
       background-color: rgba(255, 255, 255, 1.0);
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
       border-radius: 3px;
       z-index: 800;
+    }
+
+    /* resize the text */
+    h1 {
+      font-family: 'Quattrocento', serif;
+      color: black;
+      font-size: 18px;
+      display: inline-block;
+      margin-top: 0.25em;
+      margin-bottom: 0.0em;
+      margin-left: 0.5em;
+      margin-right: 0;
+      font-weight: bold;
+      /*text-transform: uppercase;*/
+    }
+
+    h2 {
+      font-family: 'Lora', serif;
+      font-size: 12px;
+      color: #383838;
+      display: inline-block;
+      margin-top: 0.0em;
+      margin-bottom: 0.0em;
+      margin-left: 0.75em;
+      margin-right: 0;
+      font-weight: normal;
     }
 
     /* style the map */
@@ -98,10 +127,24 @@
       opacity: 0.7;
     }
 
+    /* the zoom control */
+    .leaflet-top {
+      bottom: 0;
+    }
+
+    .leaflet-top .leaflet-control-zoom {
+      top: 80px;
+    }
+
   </style>
 </head>
 
 <body>
+  <!-- define header content -->
+  <header>
+    <h1>Distribution of Classic Plaques by Base Design and Register Number</h1>
+    <h2>Katina Lillios, PhD, University of Iowa Department of Anthropology</h2>
+  </header>
   <!-- the map -->
   <div id="map"></div>
   <!-- ui slider -->
@@ -119,6 +162,8 @@
   <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"></script>
   <!-- Add a link to the jQuery JavaScript library so you can leverage ajax methods to load your data -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <!-- Add a link to the d3js library -->
+  <script src="https://d3js.org/d3.v4.min.js"></script>
   <!-- All JavaScript goes inside the script tags below -->
   <script>
     // define the map with the options above
@@ -134,6 +179,11 @@
     L.control.scale({
       position: 'topright' // Position the scale bar at the bottom-right corner
     }).addTo(map);
+
+    // scales values logarithmically
+    const scale = d3.scaleLog()
+      .domain([1, 36])
+      .range([5, 20]);
 
     // Define color ramp for checkerboard registers
     function setCBColor(d) {
@@ -171,19 +221,6 @@
     const trFiltered = L.layerGroup();
     const zzFiltered = L.layerGroup();
 
-    // Define the overlays
-    const overlays = {
-      "Checkerboard":cbFiltered,
-      "Chevron":chFiltered,
-      "Triangle":trFiltered,
-      "Zigzag":zzFiltered
-    };
-
-    // Create a layer control
-    L.control.layers(overlays, null, {
-      collapsed:false,
-    }).addTo(map);
-
     // use jquery to load GeoJSON data
     $.when(
       $.getJSON("data/hex_grid.geojson"),
@@ -195,9 +232,10 @@
       $.getJSON("data/Registers_all_hex_count_chevron.geojson"),
       $.getJSON("data/Registers_all_hex_count_triangle.geojson"),
       $.getJSON("data/Registers_all_hex_count_zigzag.geojson"),
+      $.getJSON("data/burial_sites_by_chamber_area.geojson"),
     // when the files are done loading,
     // identify them with names and process them through a function
-  ).done(function(hg, pd, sp, pb, sb, cb, ch, tr, zz) {
+  ).done(function(hg, pd, sp, pb, sb, cb, ch, tr, zz, chArea) {
 
       // define the value in the slider when the map loads
       let currentCount = $('.slider').val();
@@ -416,14 +454,59 @@
         }
       });
 
+      const chamberArea = L.geoJson(chArea, {
+
+        pointToLayer: function(feature, latlng) { // using pointToLayer...
+          return L.circleMarker(latlng, {
+            fillColor: '#708598', // set the fill color with a hexcode
+            color: '#537898', // set the border color
+            weight: 1, // set the weight of the border
+            fillOpacity: 0.25, // set the opacity of the fill color
+            radius: scale(parseFloat(feature.properties.ChamArea)) // set the radii of the circles
+          });
+        },
+        onEachFeature: function(feature, layer) {
+          const popup = '<b>' + feature.properties.Site_Name + '</b><br>Location: ' + feature.properties.Geocode_Loc + '<br>Chamber Area: ' + feature.properties.ChamArea;
+          layer.bindTooltip(popup);
+          layer.on('mouseover', function(e) {
+            this.setStyle({
+              color: 'yellow'
+            });
+          });
+          layer.on('mouseout', function(e) {
+            this.setStyle({
+              color: '#537898'
+            });
+          })
+        }
+
+      }).addTo(map);
+
+      // Define the radio layers
+      const radio = {
+        "Checkerboard":cbFiltered,
+        "Chevron":chFiltered,
+        "Triangle":trFiltered,
+        "Zigzag":zzFiltered
+      };
+
+      const overlays = {
+        "Sites by Chamber Area": chamberArea
+      };
+
+      // Create a layer control
+      L.control.layers(radio, overlays, {
+        collapsed:false,
+      }).addTo(map);
+
       // call functions defined below
-      sequenceUI(checkerboard, chevron, triangle, zigzag); // calls the slider and sends the layers to it
+      sequenceUI(checkerboard, chevron, triangle, zigzag, chamberArea); // calls the slider and sends the layers to it
       createCountLegend(currentCount); // calls the createCountLegend function
 
     });
 
     // Define a function called "sequenceUI"
-    function sequenceUI(checkerboard, chevron, triangle, zigzag) { // feed it the data
+    function sequenceUI(checkerboard, chevron, triangle, zigzag, chamberArea) { // feed it the data
 
       // use the jQuery ajax method to get the slider element
       $('.slider')
@@ -486,6 +569,9 @@
             };
 
           });
+
+          // bring the chamberArea layer to the front
+          chamberArea.bringToFront();
 
         });
 
